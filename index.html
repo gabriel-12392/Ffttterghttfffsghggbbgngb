@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>School Cloud Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --blue: #2563eb; --green: #10b981; --red: #ef4444; --bg: #f0f2f5; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); padding: 15px; color: #1e293b; }
+        .container { width: 100%; max-width: 450px; background: white; padding: 20px; border-radius: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.05); margin: auto; }
+        .hidden { display: none !important; }
+        
+        input, select, button, textarea { width: 100%; padding: 14px; margin: 8px 0; border-radius: 12px; border: 1px solid #ddd; font-size: 16px; }
+        button { background: var(--blue); color: white; border: none; font-weight: 700; cursor: pointer; }
+
+        /* საგნების დივი მოსწავლისთვის */
+        .sub-card { padding: 20px; border-radius: 18px; margin-bottom: 12px; color: white; position: relative; cursor: pointer; transition: 0.2s; }
+        .sub-card:active { transform: scale(0.98); }
+        .sub-card h4 { font-size: 18px; margin-bottom: 5px; }
+        .sub-card p { font-size: 13px; opacity: 0.9; }
+
+        /* ისტორიის სია */
+        .history-item { display: flex; align-items: center; justify-content: space-between; background: white; padding: 12px; border-radius: 12px; margin-bottom: 8px; border-left: 5px solid var(--blue); }
+        .comment-btn { background: #f1f5f9; color: #1e293b; width: auto; padding: 5px 10px; font-size: 12px; margin: 0; }
+
+        /* მასწავლებლის საგნების არჩევა */
+        .sub-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; background: #f8fafc; padding: 10px; border-radius: 12px; }
+        .sub-opt { font-size: 12px; display: flex; align-items: center; gap: 5px; }
+        
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 45px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 24px; transition: .3s; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s; }
+        input:checked + .slider { background: var(--green); }
+        input:checked + .slider:before { transform: translateX(21px); }
+    </style>
+</head>
+<body>
+
+<div id="auth-ui" class="container">
+    <h2 style="text-align:center; margin-bottom:15px;">🏫 School Portal</h2>
+    <div id="login-form">
+        <input type="number" id="l-id" placeholder="პირადი ნომერი">
+        <input type="password" id="l-pass" placeholder="პაროლი">
+        <button onclick="handleLogin()">შესვლა</button>
+        <p style="text-align:center; margin-top:15px;">არ გაქვს აქაუნთი? <span onclick="showReg()" style="color:var(--blue); font-weight:bold;">რეგისტრაცია</span></p>
+    </div>
+
+    <div id="reg-form" class="hidden">
+        <select id="r-role" onchange="toggleRegFields()">
+            <option value="student">მოსწავლე</option>
+            <option value="teacher">მასწავლებელი</option>
+        </select>
+        <input type="text" id="r-name" placeholder="სახელი და გვარი">
+        <input type="number" id="r-id" placeholder="პირადი ნომერი">
+        <input type="password" id="r-pass" placeholder="პაროლი">
+        
+        <div id="teacher-subs" class="hidden">
+            <p style="font-size:12px; margin:5px;">აირჩიეთ საგნები:</p>
+            <div class="sub-selector" id="sub-checklist"></div>
+        </div>
+
+        <button onclick="handleRegister()" style="background:var(--green); margin-top:15px;">რეგისტრაცია</button>
+        <button onclick="location.reload()" style="background:#94a3b8;">უკან</button>
+    </div>
+</div>
+
+<div id="student-ui" class="container hidden">
+    <h3 id="st-welcome"></h3>
+    <div id="st-subjects" style="margin-top:20px;"></div>
+    <div id="st-history" class="hidden">
+        <button onclick="closeHistory()" style="background:#94a3b8; margin-bottom:10px;">⬅ უკან</button>
+        <div id="calc-area" style="background:var(--blue); color:white; padding:15px; border-radius:15px; margin-bottom:15px; text-align:center;"></div>
+        <div id="history-list"></div>
+    </div>
+</div>
+
+<div id="teacher-ui" class="container hidden">
+    <h3>👨‍🏫 მასწავლებლის პანელი</h3>
+    <select id="t-active-sub"></select>
+    <input type="date" id="t-date">
+    <button onclick="loadClass()">სიის ნახვა</button>
+    <div id="t-work" class="hidden">
+        <div id="t-students-list" style="margin:15px 0;"></div>
+        <textarea id="t-hw" placeholder="დავალება..."></textarea>
+        <button onclick="saveJournal()" style="background:var(--green)">შენახვა</button>
+    </div>
+    <button onclick="location.reload()" style="background:var(--red); margin-top:20px;">გამოსვლა</button>
+</div>
+
+<script>
+    const _supabase = supabase.createClient('https://lzhbxjabyamqzyyjymmg.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6aGJ4amFieWFtcXp5eWp5bW1nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk3NzIzMjUsImV4cCI6MjA4NTM0ODMyNX0.GXTHQZEkYF32qJUDIdyBCkklsPntt3EjMuyDzdO97MQ');
+    const colors = ["#FF6B6B", "#4D96FF", "#6BCB77", "#FFD93D", "#9575CD", "#FB8C00", "#00ACC1"];
+    const allSubs = ["ქართული", "მათემატიკა", "ბუნება", "ინგლისური", "ისტორია", "გეოგრაფია", "ფიზიკა", "ქიმია", "ბიოლოგია", "ისტ"];
+    
+    let currentUser = null;
+
+    // რეგისტრაციის მომზადება
+    allSubs.forEach(s => {
+        document.getElementById('sub-checklist').innerHTML += `<label class="sub-opt"><input type="checkbox" value="${s}"> ${s}</label>`;
+    });
+
+    function showReg() { document.getElementById('login-form').classList.add('hidden'); document.getElementById('reg-form').classList.remove('hidden'); }
+    function toggleRegFields() { document.getElementById('teacher-subs').classList.toggle('hidden', document.getElementById('r-role').value !== 'teacher'); }
+
+    async function handleRegister() {
+        const role = document.getElementById('r-role').value;
+        const name = document.getElementById('r-name').value;
+        const id = document.getElementById('r-id').value;
+        const pass = document.getElementById('r-pass').value;
+        let selected = [];
+        if(role === 'teacher') document.querySelectorAll('#sub-checklist input:checked').forEach(i => selected.push(i.value));
+        
+        const { error } = await _supabase.from('users').insert({ id, name, pass, role, subjects: selected.join(',') });
+        if(!error) location.reload(); else alert(error.message);
+    }
+
+    async function handleLogin() {
+        const id = document.getElementById('l-id').value;
+        const pass = document.getElementById('l-pass').value;
+        const { data: user } = await _supabase.from('users').select('*').eq('id', id).eq('pass', pass).single();
+        if(!user) return alert("არასწორია!");
+        currentUser = user;
+        document.getElementById('auth-ui').classList.add('hidden');
+        if(user.role === 'teacher') showTeacherPanel(); else showStudentPanel();
+    }
+
+    // მასწავლებელი
+    function showTeacherPanel() {
+        document.getElementById('teacher-ui').classList.remove('hidden');
+        const sel = document.getElementById('t-active-sub');
+        currentUser.subjects.split(',').forEach(s => sel.innerHTML += `<option value="${s}">${s}</option>`);
+    }
+
+    async function loadClass() {
+        document.getElementById('t-work').classList.remove('hidden');
+        const { data: sts } = await _supabase.from('users').select('id, name').eq('role', 'student');
+        const list = document.getElementById('t-students-list'); list.innerHTML = "";
+        sts.forEach(s => {
+            list.innerHTML += `<div class="teacher-row" style="display:flex; align-items:center; justify-content:space-between; padding:10px; background:#f9f9f9; margin-bottom:5px; border-radius:10px;">
+                <span style="font-size:14px;">${s.name}</span>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <label class="switch"><input type="checkbox" id="at-${s.id}" checked><span class="slider"></span></label>
+                    <input type="text" id="gr-${s.id}" placeholder="10" style="width:40px; margin:0; padding:5px; text-align:center;">
+                    <input type="text" id="cm-${s.id}" placeholder="კომენტარი" style="width:80px; margin:0; padding:5px; font-size:12px;">
+                </div>
+            </div>`;
+        });
+    }
+
+    async function saveJournal() {
+        const date = document.getElementById('t-date').value;
+        const sub = document.getElementById('t-active-sub').value;
+        const { data: sts } = await _supabase.from('users').select('id').eq('role', 'student');
+        const rows = sts.map(s => ({
+            date, subject: sub, student_id: s.id, teacher_name: currentUser.name,
+            grade: document.getElementById(`gr-${s.id}`).value,
+            attending: document.getElementById(`at-${s.id}`).checked,
+            comment: document.getElementById(`cm-${s.id}`).value,
+            homework: document.getElementById('t-hw').value
+        }));
+        await _supabase.from('journal').upsert(rows);
+        alert("შენახულია!");
+    }
+
+    // მოსწავლე
+    async function showStudentPanel() {
+        document.getElementById('student-ui').classList.remove('hidden');
+        document.getElementById('st-welcome').innerText = "გამარჯობა, " + currentUser.name;
+        const { data: teachers } = await _supabase.from('users').select('name, subjects').eq('role', 'teacher');
+        const container = document.getElementById('st-subjects');
+        allSubs.forEach((s, i) => {
+            const t = teachers.find(t => t.subjects.includes(s));
+            container.innerHTML += `<div class="sub-card" style="background:${colors[i%colors.length]}" onclick="openHistory('${s}')">
+                <h4>${s}</h4>
+                <p>👨‍🏫 მასწავლებელი: ${t ? t.name : 'არ არის'}</p>
+            </div>`;
+        });
+    }
+
+    async function openHistory(sub) {
+        document.getElementById('st-subjects').classList.add('hidden');
+        document.getElementById('st-history').classList.remove('hidden');
+        const { data: logs } = await _supabase.from('journal').select('*').eq('student_id', currentUser.id).eq('subject', sub).order('date', {ascending: false});
+        
+        let sum = 0, count = 0;
+        const list = document.getElementById('history-list'); list.innerHTML = "";
+        logs.forEach(l => {
+            if(l.grade && !isNaN(l.grade)) { sum += parseFloat(l.grade); count++; }
+            list.innerHTML += `<div class="history-item">
+                <div><small>${l.date}</small><br><b>${l.attending ? '✅' : '❌'}</b> | ნიშანი: ${l.grade || '-'}</div>
+                ${l.comment ? `<button class="comment-btn" onclick="alert('კომენტარი: ${l.comment}')">💬 კომენტარი</button>` : ''}
+            </div>`;
+        });
+        document.getElementById('calc-area').innerHTML = `<h4>საშუალო ქულა: ${(sum/2).toFixed(1)}</h4><small>(ნიშნების ჯამი გაყოფილი ორზე)</small>`;
+    }
+
+    function closeHistory() { document.getElementById('st-history').classList.add('hidden'); document.getElementById('st-subjects').classList.remove('hidden'); }
+</script>
+</body>
+  </html>
