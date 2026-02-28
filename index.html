@@ -111,17 +111,18 @@
         const name = document.getElementById('r-name').value;
         const id = document.getElementById('r-id').value;
         const pass = document.getElementById('r-pass').value;
+        const email = document.getElementById('r-email').value;
         let selected = [];
         if(role === 'teacher') document.querySelectorAll('#sub-checklist input:checked').forEach(i => selected.push(i.value));
         
-        const { error } = await _supabase.from('users').insert({ id, name, pass, role, subjects: selected.join(',') });
+        const { error } = await _supabase.from('users').insert({ id, name, pass, role, email, subjects: selected.join(',') });
         if(!error) location.reload(); else alert(error.message);
     }
 
     async function handleLogin() {
         const id = document.getElementById('l-email').value;
         const pass = document.getElementById('l-pass').value;
-        const { data: user } = await _supabase.from('users').select('*').eq('id', id).eq('pass', pass).single();
+        const { data: user } = await _supabase.from('users').select('*').eq('email', email).eq('pass', pass).single();
         if(!user) return alert("არასწორია!");
         currentUser = user;
         document.getElementById('auth-ui').classList.add('hidden');
