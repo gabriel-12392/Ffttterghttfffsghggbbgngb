@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<div id="admin-chat" style="width:350px; border:2px solid #333; padding:15px; background:#f0f2f5; border-radius:15px; font-family: sans-serif;">
+    <h4 id="status-text" style="margin-top:0; color:red;">🔴 ოპერატორი ოფლაინშია</h4>
+    <div id="admin-msg-box" style="height:300px; overflow-y:auto; background:white; margin-bottom:10px; padding:10px; border-radius:10px; border:1px solid #ccc;"></div>
+    <div id="controls" class="hidden">
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="a-input" placeholder="უპასუხეთ..." style="flex:1; padding:8px; border-radius:5px; border:1px solid #ddd;">
+            <button onclick="sendAdminMsg()" style="padding:8px; background:#10b981; color:white; border:none; border-radius:5px; cursor:pointer;">გაგზავნა</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const _supabase = supabase.createClient('https://qsrnblcufiesgxlwvscv.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzcm5ibGN1Zmllc2d4bHd2c2N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMjY0MTcsImV4cCI6MjA4NzgwMjQxN30.pSQ1w6v6hEVf3BQRDIHG-qJ6n9tiuv0Wcwf3QppRf7k');
+    let lastMsgId = 0;
+    let isConnected = false;
+
+    async function checkSystem() {
+        const { data } = await _supabase.from('chat_messages')
+            .select('*')
+            .eq('sender', 'user')
+            .order('id', { ascending: false })
+            .limit(1);
+
+        if (data && data.length > 0 && data[0].id > lastMsgId) {
+            // თუ ჯერ არ ვართ ხაზზე, ვეკითხებით ოპერატორს
+            if (!isConnected) {
+                if (confirm("მომხმარებელი იწერება. გსურთ ხაზზე გასვლა?")) {
+                    isConnected = true;
+                    document.getElementById('status-text').innerText = "🟢 ხაზზე ხართ";
+                    document.getElementById('status-text').style.color = "green";
+                    document.getElementById('controls').classList.remove('hidden');
+                }
+            }
+            lastMsgId = data[0].id;
+        }
+        loadAdminMsgs();
+    }
+
+    async function sendAdminMsg() {
+        const input = document.getElementById('a-input');
+        if(!input.value.trim()) return;
+        await _supabase.from('chat_messages').insert({ sender: 'admin', message: input.value, is_active: true });
+        input.value = "";
+        loadAdminMsgs();
+    }
+
+    async function loadAdminMsgs() {
+        const { data } = await _supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+        const box = document.getElementById('admin-msg-box');
+        box.innerHTML = data.map(m => `
+            <div style="margin-bottom:8px; text-align: ${m.sender === 'admin' ? 'right' : 'left'}">
+                <span style="background:${m.sender === 'admin' ? '#10b981' : '#eee'}; color:${m.sender === 'admin' ? 'white' : 'black'}; padding:5px 10px; border-radius:10px; display:inline-block;">
+                    ${m.message}
+                </span>
+            </div>
+        `).join('');
+        box.scrollTop = box.scrollHeight;
+    }
+
+    setInterval(checkSystem, 3000);
+</script>
+
+<style>
+    .hidden { display: none; }
+</style>
+</body>
+</html>
