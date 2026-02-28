@@ -119,7 +119,7 @@
     }
 
     async function handleLogin() {
-        const id = document.getElementById('l-id').value;
+        const id = document.getElementById('l-email').value;
         const pass = document.getElementById('l-pass').value;
         const { data: user } = await _supabase.from('users').select('*').eq('id', id).eq('pass', pass).single();
         if(!user) return alert("არასწორია!");
